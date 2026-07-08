@@ -79,7 +79,7 @@ function setOneTimeToday(on){if(on)localStorage.setItem(oneTimeKey(),todayDate()
 function currentPlan(){return draftPlan||storedPlan()}
 function currentDays(){return draftDays||storedDays()}
 function label(){return {daily:'כל ערב',custom:'ימים קבועים',manual:'רק לפי הזמנה'}[currentPlan()]||'כל ערב'}
-function baseWanted(){let p=currentPlan();if(!noFriday())return false;if(hasOneTimeToday())return !me.skip_today;if(p==='manual')return !me.skip_today;if(p==='custom'){return currentDays().includes(String(dIndex()))&&!me.skip_today}return !me.skip_today}return !me.skip_today}
+function baseWanted(){let p=currentPlan();if(!noFriday())return false;if(hasOneTimeToday())return !me.skip_today;if(p==='manual')return !me.skip_today;if(p==='custom'){return currentDays().includes(String(dIndex()))&&!me.skip_today}return !me.skip_today}
 function todayWanted(){return draftToday===null?baseWanted():draftToday}
 function inServiceArea(){return norm(me?.street).includes(SERVICE_STREET)}
 function spotsLeft(){return Math.max(0,DAILY_LIMIT-ordersToday)}
