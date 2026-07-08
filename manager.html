@@ -44,6 +44,9 @@ input,textarea{user-select:text;-webkit-user-select:text}
 .status.wait{background:rgba(255,215,120,.10);color:var(--gold);border:1px solid rgba(255,215,120,.32)}
 .smallLine{display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,215,120,.09);padding:8px 0;color:var(--muted);font-size:13px}.smallLine b{color:var(--gold)}
 @media(max-width:420px){.filterbar{grid-template-columns:repeat(2,1fr)}.quickActions{grid-template-columns:1fr}.client-row{display:block}.status{margin-top:8px}}
+
+.installFab{position:fixed;right:14px;bottom:14px;z-index:55;border:1px solid rgba(255,215,120,.32);border-radius:999px;background:rgba(18,14,7,.94);color:var(--gold);font-weight:950;padding:12px 16px;box-shadow:0 14px 45px rgba(0,0,0,.42)}
+.installHelp{font-size:13px;color:var(--muted);line-height:1.5;margin-top:8px}
 </style>
 </head>
 <body>
@@ -61,7 +64,7 @@ if(sessionStorage.getItem('e10ok')!=='1'){
 }
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(function(){});
 let installEvent=null,bakeryTimer=null,currentFilter='all',activeTab='dash',lastSync=new Date(),notices=[];
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvent=e;showInstall()});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvent=e;showInstall()});window.addEventListener('appinstalled',()=>{localStorage.setItem('e10_manager_installed','1');toast('האפליקציה הותקנה','מנהל ערב 10 נוסף למסך הבית.');render()});
 
 const db=supabase.createClient(window.EREV10_SUPABASE_URL,window.EREV10_SUPABASE_KEY);
 const app=document.querySelector('#manager-app'),ui=document.querySelector('#ui');
@@ -123,9 +126,44 @@ async function load(){
   lastSync=new Date();
   render();
 }
-function installBox(){return`<div id="installBox" class="card install-box"><p class="muted">רוצה שהמנהל יהיה במסך הבית?</p><button class="cta" onclick="installApp()">התקן את מנהל ערב 10</button><p class="muted" style="font-size:13px">בחר “התקנה” ולא “יצירת קיצור דרך”.</p></div>`}
-function showInstall(){setTimeout(()=>{let b=document.getElementById('installBox');if(b&&installEvent)b.classList.add('show')},100)}
-async function installApp(){if(!installEvent){toast('התקנה ידנית','פתח בתפריט הדפדפן ובחר “התקנה”.');return}installEvent.prompt();await installEvent.userChoice;installEvent=null;let b=document.getElementById('installBox');if(b)b.classList.remove('show')}
+function isStandalone(){return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true}
+function installBox(){
+  if(isStandalone()||localStorage.getItem('e10_manager_installed')==='1')return '';
+  return `<div id="installBox" class="card install-box">
+    <h2 style="color:var(--gold);margin-top:0">📲 התקנת אפליקציית מנהל</h2>
+    <p class="muted">מומלץ להתקין את מנהל ערב 10 למסך הבית כדי להיכנס מהר בלי לחפש קישור.</p>
+    <button class="cta" onclick="installApp()">התקן אפליקציה</button>
+    <div class="installHelp">באנדרואיד לבחור “התקנה” ולא “יצירת קיצור דרך”. באייפון: שיתוף → הוסף למסך הבית.</div>
+  </div>`;
+}
+function installFab(){
+  if(isStandalone()||localStorage.getItem('e10_manager_installed')==='1')return '';
+  return `<button id="installFab" class="installFab" onclick="installApp()">📲 התקן</button>`;
+}
+function showInstall(){
+  setTimeout(()=>{
+    if(isStandalone())return;
+    let b=document.getElementById('installBox');
+    if(b)b.classList.add('show');
+  },100);
+}
+async function installApp(){
+  if(isStandalone()){localStorage.setItem('e10_manager_installed','1');render();return}
+  if(!installEvent){
+    toast('התקנה ידנית','באנדרואיד פתח את תפריט הדפדפן ובחר “התקנה”. באייפון: שיתוף → הוסף למסך הבית.');
+    return;
+  }
+  installEvent.prompt();
+  let choice=await installEvent.userChoice;
+  installEvent=null;
+  if(choice&&choice.outcome==='accepted'){
+    localStorage.setItem('e10_manager_installed','1');
+    toast('האפליקציה נוספה','מנהל ערב 10 נוסף למסך הבית.');
+  }else{
+    toast('ההתקנה בוטלה','אפשר להתקין בהמשך דרך כפתור ההתקנה.');
+  }
+  render();
+}
 
 function setTab(t){activeTab=t;render()}
 function tabs(){
@@ -134,7 +172,7 @@ function tabs(){
 }
 function render(){
   let u=unpaid().length,s=skipped().length,p=problems().length;
-  app.innerHTML=`${bell()}<section class="screen">
+  app.innerHTML=`${bell()}${installFab()}<section class="screen">
     <h1 class="top-title">ניהול ערב 10</h1>
     <div class="small-card" style="margin-bottom:10px;font-weight:900">${p?'🔴 '+p+' בעיות דורשות טיפול':s?'🟡 '+s+' ביטלו להיום':u?'🟠 '+u+' לא שילמו':'🟢 המערכת מוכנה לערב'}</div>
     <p class="muted" style="text-align:center;font-size:12px">עודכן ${timeAgo()}</p>
@@ -196,7 +234,7 @@ function customersPane(){
   <div id="customers-list" class="grid" style="margin-top:16px"></div>`;
 }
 function toolsPane(){
-  return `<div class="card">
+  return `${installBox()}<div class="card">
     <h2 style="color:var(--gold);margin-top:0">קישורים מהירים</h2>
     <div class="quickActions">
       <a href="./courier.html">פתח שליח</a>
