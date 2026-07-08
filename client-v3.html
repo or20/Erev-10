@@ -17,6 +17,16 @@
 .pulled{animation:pulseSave .5s ease}
 @keyframes pulseSave{0%{transform:scale(.99)}50%{transform:scale(1.01)}100%{transform:scale(1)}}
 @media(max-width:420px){.flow{grid-template-columns:1fr}.profileGrid{grid-template-columns:1fr}.bell{top:8px;left:8px}}
+
+.tabs{position:sticky;top:0;z-index:30;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:rgba(10,8,5,.94);backdrop-filter:blur(10px);border:1px solid rgba(255,215,120,.18);border-radius:20px;padding:7px;margin:10px 0 14px}
+.tabBtn{border:0;border-radius:14px;background:rgba(255,255,255,.06);color:var(--muted);font-weight:950;padding:10px 4px;font-size:12px}
+.tabBtn.on{background:linear-gradient(135deg,var(--gold),#ffe28a);color:#201500}
+.tabPane{display:none}.tabPane.on{display:block}
+.heroStatus{border-color:rgba(37,211,102,.34)!important;background:rgba(37,211,102,.07)!important}
+.bigAction{font-size:18px!important;padding:18px 10px!important}
+.compact-note{font-size:13px;color:var(--muted);line-height:1.45;margin:8px 0}
+.miniLine{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid rgba(255,215,120,.09);padding:8px 0;color:var(--muted);font-size:13px}
+.miniLine b{color:var(--gold)}
 </style></head><body><main id="app" class="app-shell"></main><div id="ui"></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="./supabase-config.js"></script><script>
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(function(){});
 let installEvent=null,statusTimer=null;
@@ -61,11 +71,15 @@ function planKey(){return 'e10_plan_'+me.id}
 function daysKey(){return 'e10_days_'+me.id}
 function initKey(){return 'e10_initialized_'+me.id}
 function storedPlan(){return localStorage.getItem(planKey())||'daily'}
-function storedDays(){let v=localStorage.getItem(daysKey());return v?v.split(','):['0','1','2','3','4','6']}
+function storedDays(){let v=localStorage.getItem(daysKey());return v?v.split(','):['0','1','2','3','4','6']}function oneTimeKey(){return 'e10_one_time_'+me.id}
+function todayDate(){let d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function hasOneTimeToday(){return localStorage.getItem(oneTimeKey())===todayDate()}
+function setOneTimeToday(on){if(on)localStorage.setItem(oneTimeKey(),todayDate());else localStorage.removeItem(oneTimeKey())}
+
 function currentPlan(){return draftPlan||storedPlan()}
 function currentDays(){return draftDays||storedDays()}
 function label(){return {daily:'כל ערב',custom:'ימים קבועים',manual:'רק לפי הזמנה'}[currentPlan()]||'כל ערב'}
-function baseWanted(){let p=currentPlan();if(!noFriday())return false;if(p==='manual')return !me.skip_today;if(p==='custom'){return currentDays().includes(String(dIndex()))&&!me.skip_today}return !me.skip_today}
+function baseWanted(){let p=currentPlan();if(!noFriday())return false;if(hasOneTimeToday())return !me.skip_today;if(p==='manual')return !me.skip_today;if(p==='custom'){return currentDays().includes(String(dIndex()))&&!me.skip_today}return !me.skip_today}return !me.skip_today}
 function todayWanted(){return draftToday===null?baseWanted():draftToday}
 function inServiceArea(){return norm(me?.street).includes(SERVICE_STREET)}
 function spotsLeft(){return Math.max(0,DAILY_LIMIT-ordersToday)}
@@ -135,6 +149,8 @@ async function chooseToday(v){
   saving=false;
   if(r.error){updateStatusOnly();return toast('שגיאה בשמירה',r.error.message);}
   me.skip_today=!v;
+  if(v && currentPlan()==='custom' && !currentDays().includes(String(dIndex()))) setOneTimeToday(true);
+  if(!v) setOneTimeToday(false);
   let fresh=await db.from('customers').select('*').eq('id',me.id).single();
   if(!fresh.error&&fresh.data)me=fresh.data;
   draftToday=null;
@@ -213,9 +229,100 @@ function loyaltyBox(){
 }
 
 function areaBox(){return `<div class="card area-card"><h2 style="color:var(--gold);margin-top:0">📍 אזור פעילות נוכחי</h2><p class="muted">כרגע השירות פעיל רק ברחוב <b>${SERVICE_STREET}</b>.</p><div id="spotsLeft" class="spots">🥖 נותרו ${spotsLeft()} מתוך ${DAILY_LIMIT} מקומות להיום</div><p class="muted" style="font-size:13px">אנחנו מגבילים ל־${DAILY_LIMIT} הזמנות ביום כדי לשמור על טריות, דיוק ושירות טוב.<br>⏰ ניתן להוסיף הזמנה בכל יום מ־21:00 בערב ועד 12:00 בצהריים.</p></div>`}
+
+let activeTab='order';
+function setTab(t){activeTab=t;screen()}
+function tabs(){
+  const items=[['order','🥖','הזמנה'],['plan','📅','מנוי'],['account','👤','חשבון'],['help','❓','עזרה']];
+  return `<div class="tabs">${items.map(([k,i,t])=>`<button class="tabBtn ${activeTab===k?'on':''}" onclick="setTab('${k}')">${i}<br>${t}</button>`).join('')}</div>`;
+}
+
 function screen(){
   let ok=todayWanted(),st=statusText(ok),isLocked=locked()||!inServiceArea()||limitFull();
-  app.innerHTML=`${bell()}<section class="screen"><div class="pill"><span class="dot"></span>ערב 10 · הלחם של השכונה</div><h1 class="hello">ערב טוב,<br>${clean(me.name)}</h1>${installBox()}${areaBox()}<div class="card"><p class="muted" style="font-size:12px;margin:0 0 4px">מס׳ לקוח</p><div class="badge">${clean(me.subscription_id)}</div><div id="cloudState" class="cloud">${saving?'⏳ שומר בענן...':cloudText()}</div><p class="muted">הסטטוס שלך להיום</p><div id="statusTitle" class="status-big">${st.title}</div><p id="statusNote" class="muted status-note">${clean(st.note).replaceAll('\n','<br>')}</p>${orderFlow()}<div class="tagrow"><span class="tag"><b>${dayName()}</b>היום</span><span class="tag"><b>21:00–12:00</b>חלון הזמנה</span><span class="tag"><b>18:30–20:00</b>שעת חלוקה</span><span class="tag"><b>10</b>לחמניות</span></div><div class="moreBox"><b>צריך יותר מ־10 לחמניות?</b><br><span class="muted">להזמנה גדולה או מיוחדת צור קשר טלפוני.</span><button class="cta secondary" onclick="specialOrder()">בקשה להזמנה מיוחדת</button></div><p>${clean(addr(me))}</p><p class="muted" style="font-size:13px">גם אם היום לא מופיע בימים הקבועים שלך — אפשר לבצע כאן הזמנה חד־פעמית בלי לשנות את המנוי.</p><div class="two"><button id="yesBtn" class="cta yes ${ok?'chosen':''} ${isLocked?'lockedBtn':''}" onclick="chooseToday(true)">אני רוצה ${orderWord()}</button><button id="noBtn" class="cta no ${!ok?'chosen':''} ${isLocked?'lockedBtn':''}" onclick="chooseToday(false)">היום לא</button></div><button class="cta secondary" onclick="refresh()">רענן סטטוס</button></div><h2 class="section-title">סוג המנוי</h2><div class="grid">${pcard('daily','כל ערב','ברירת המחדל היא לקבל בכל יום חלוקה. אין חלוקה ביום שישי.')}${pcard('custom','ימים קבועים','בחר ימים קבועים. ביום שנבחר ברירת המחדל היא לקבל.')}${pcard('manual','רק לפי הזמנה','ברירת המחדל היא שאין הזמנה.<br>ניתן להזמין מ־21:00 בערב ועד 12:00 בצהריים.')}</div><div class="card" style="margin-top:18px"><p class="muted">סוג מנוי נוכחי</p><h2 style="color:var(--gold);margin-top:0">${label()}</h2><button class="cta secondary" onclick="out()">יציאה</button></div>${loyaltyBox()}${profileBox()}${faqBox()}<div class="card" style="margin-top:18px"><p class="muted">רוצה לעצור זמנית את השירות?</p><button class="cta smallDanger" onclick="pauseSub()">עצירת מנוי</button></div>${saveBox()}<button class="cta secondary helpBtn" onclick="help()">עזרה?</button><div class="credit"><a href="https://share.google/HUoheAjuVnUKozsP8">מבית zagzagwebs</a></div><div class="muted" style="font-size:12px;text-align:center;margin-top:8px">גרסה 3.8 · הזמנה חד־פעמית · סנכרון · פעמון</div></section>`;
+  let oneTime = hasOneTimeToday() && currentPlan()==='custom' && !currentDays().includes(String(dIndex()));
+  app.innerHTML=`${bell()}<section class="screen">
+    <div class="pill"><span class="dot"></span>ערב 10 · הלחם של השכונה</div>
+    <h1 class="hello">ערב טוב,<br>${clean(me.name)}</h1>
+    ${tabs()}
+    ${installBox()}
+
+    <div class="tabPane ${activeTab==='order'?'on':''}">
+      <div class="card heroStatus">
+        <p class="muted" style="font-size:12px;margin:0 0 4px">מס׳ לקוח</p>
+        <div class="badge">${clean(me.subscription_id)}</div>
+        <div id="cloudState" class="cloud">${saving?'⏳ שומר בענן...':cloudText()}</div>
+        <p class="muted">הסטטוס שלך</p>
+        <div id="statusTitle" class="status-big">${st.title}</div>
+        <p id="statusNote" class="muted status-note">${clean(st.note).replaceAll('\n','<br>')}</p>
+        ${oneTime?`<p class="compact-note">✅ זו הזמנה חד־פעמית ל${orderWord()}. הימים הקבועים שלך לא השתנו.</p>`:''}
+        ${orderFlow()}
+      </div>
+
+      ${areaBox()}
+
+      <div class="card">
+        <h2 style="color:var(--gold);margin-top:0">פעולה מהירה</h2>
+        <p class="compact-note">גם אם היום לא מופיע בימים הקבועים שלך — אפשר לבצע כאן הזמנה חד־פעמית בלי לשנות את המנוי.</p>
+        <div class="two">
+          <button id="yesBtn" class="cta yes bigAction ${ok?'chosen':''} ${isLocked?'lockedBtn':''}" onclick="chooseToday(true)">אני רוצה ${orderWord()}</button>
+          <button id="noBtn" class="cta no bigAction ${!ok?'chosen':''} ${locked()?'lockedBtn':''}" onclick="chooseToday(false)">היום לא</button>
+        </div>
+        <button class="cta secondary" onclick="refresh()">רענן סטטוס</button>
+      </div>
+
+      <div class="card">
+        <h2 style="color:var(--gold);margin-top:0">פרטי ההזמנה</h2>
+        <div class="miniLine"><span>יום</span><b>${dayName()}</b></div>
+        <div class="miniLine"><span>חלון הזמנה</span><b>21:00–12:00</b></div>
+        <div class="miniLine"><span>שעת חלוקה</span><b>18:30–20:00</b></div>
+        <div class="miniLine"><span>כמות</span><b>10 לחמניות</b></div>
+        <div class="miniLine"><span>כתובת</span><b>${clean(addr(me))}</b></div>
+        <button class="cta secondary copyBtn" onclick="copyAddress()">העתק כתובת</button>
+      </div>
+
+      <div class="card">
+        <h2 style="color:var(--gold);margin-top:0">כמות מיוחדת</h2>
+        <p class="muted">צריך יותר מ־10 לחמניות? פנה אלינו ונעדכן ידנית.</p>
+        <button class="cta secondary" onclick="specialOrder()">בקשה להזמנה מיוחדת</button>
+      </div>
+    </div>
+
+    <div class="tabPane ${activeTab==='plan'?'on':''}">
+      <h2 class="section-title">סוג המנוי</h2>
+      <div class="grid">
+        ${pcard('daily','כל ערב','ברירת המחדל היא לקבל בכל יום חלוקה. אין חלוקה ביום שישי.')}
+        ${pcard('custom','ימים קבועים','בחר ימים קבועים. ביום שנבחר ברירת המחדל היא לקבל.')}
+        ${pcard('manual','רק לפי הזמנה','ברירת המחדל היא שאין הזמנה.<br>ניתן להזמין מ־21:00 בערב ועד 12:00 בצהריים.')}
+      </div>
+      <div class="card" style="margin-top:18px">
+        <p class="muted">סוג מנוי נוכחי</p>
+        <h2 style="color:var(--gold);margin-top:0">${label()}</h2>
+        <p class="compact-note">שינוי סוג מנוי לא מוחק הזמנה חד־פעמית שכבר סימנת להיום.</p>
+      </div>
+      ${loyaltyBox()}
+      ${saveBox()}
+    </div>
+
+    <div class="tabPane ${activeTab==='account'?'on':''}">
+      ${profileBox()}
+      <div class="card" style="margin-top:18px">
+        <p class="muted">רוצה לצאת מהמערכת?</p>
+        <button class="cta secondary" onclick="out()">יציאה</button>
+      </div>
+      <div class="card" style="margin-top:18px">
+        <p class="muted">רוצה לעצור זמנית את השירות?</p>
+        <button class="cta smallDanger" onclick="pauseSub()">עצירת מנוי</button>
+      </div>
+    </div>
+
+    <div class="tabPane ${activeTab==='help'?'on':''}">
+      ${faqBox()}
+      <button class="cta secondary helpBtn" onclick="help()">עזרה?</button>
+    </div>
+
+    <div class="credit"><a href="https://share.google/HUoheAjuVnUKozsP8">מבית zagzagwebs</a></div>
+    <div class="muted" style="font-size:12px;text-align:center;margin-top:8px">גרסה 3.9 · מסודר בלשוניות · הזמנה חד־פעמית</div>
+  </section>`;
   showInstall();
   startStatusTimer();
 }
