@@ -1,7 +1,8 @@
 {
   "name": "ערב 10",
   "short_name": "ערב 10",
-  "start_url": "./index.html",
+  "start_url": "./join.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#111006",
   "theme_color": "#111006",
