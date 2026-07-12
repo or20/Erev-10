@@ -43,6 +43,7 @@ input,textarea{user-select:text;-webkit-user-select:text}
 .status.bad{background:rgba(255,70,70,.12);color:#ff9b9b;border:1px solid rgba(255,70,70,.35)}
 .status.wait{background:rgba(255,215,120,.10);color:var(--gold);border:1px solid rgba(255,215,120,.32)}
 .smallLine{display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,215,120,.09);padding:8px 0;color:var(--muted);font-size:13px}.smallLine b{color:var(--gold)}
+.deliveryProgress{height:12px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin:12px 0}.deliveryProgress>div{height:100%;background:linear-gradient(90deg,var(--gold),#ffe28a);border-radius:999px}.delivery-list{display:grid;gap:10px;margin-top:12px}.delivery-item{border:1px solid rgba(255,215,120,.16);border-radius:18px;padding:12px;background:rgba(255,255,255,.045)}.delivery-item strong{color:var(--gold)}
 @media(max-width:420px){.filterbar{grid-template-columns:repeat(2,1fr)}.quickActions{grid-template-columns:1fr}.client-row{display:block}.status{margin-top:8px}}
 
 .installFab{position:fixed;right:14px;bottom:14px;z-index:55;border:1px solid rgba(255,215,120,.32);border-radius:999px;background:rgba(18,14,7,.94);color:var(--gold);font-weight:950;padding:12px 16px;box-shadow:0 14px 45px rgba(0,0,0,.42)}
@@ -63,7 +64,7 @@ if(sessionStorage.getItem('e10ok')!=='1'){
   sessionStorage.setItem('e10ok','1');
 }
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(function(){});
-let installEvent=null,bakeryTimer=null,currentFilter='all',activeTab='dash',lastSync=new Date(),notices=[];
+let installEvent=null,bakeryTimer=null,currentFilter='all',activeTab='dash',lastSync=new Date(),notices=[],searchQuery='';
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvent=e;showInstall()});window.addEventListener('appinstalled',()=>{localStorage.setItem('e10_manager_installed','1');toast('האפליקציה הותקנה','מנהל ערב 10 נוסף למסך הבית.');render()});
 
 const db=supabase.createClient(window.EREV10_SUPABASE_URL,window.EREV10_SUPABASE_KEY);
@@ -167,7 +168,7 @@ async function installApp(){
 
 function setTab(t){activeTab=t;render()}
 function tabs(){
-  const items=[['dash','📊','לוח'],['customers','👥','לקוחות'],['bakery','🥖','מאפייה'],['tools','⚙️','כלים']];
+  const items=[['dash','📊','לוח'],['customers','👥','לקוחות'],['deliveries','🚗','שליח'],['bakery','🥖','מאפייה'],['tools','⚙️','כלים']];
   return `<div class="tabs">${items.map(([k,i,t])=>`<button class="tabBtn ${activeTab===k?'on':''}" onclick="setTab('${k}')">${i}<br>${t}</button>`).join('')}</div>`;
 }
 function render(){
@@ -187,6 +188,10 @@ function render(){
       ${customersPane()}
     </div>
 
+    <div class="tabPane ${activeTab==='deliveries'?'on':''}">
+      ${deliveriesPane()}
+    </div>
+
     <div class="tabPane ${activeTab==='bakery'?'on':''}">
       ${bakeryStatusCard()}
       ${bakeryCard()}
@@ -197,12 +202,38 @@ function render(){
     </div>
 
     <div class="credit"><a href="https://share.google/HUoheAjuVnUKozsP8">מבית zagzagwebs</a></div>
-    <div class="muted" style="font-size:12px;text-align:center;margin-top:8px">גרסה 2.7 · מנהל מסודר · התראות · סינון</div>
+    <div class="muted" style="font-size:12px;text-align:center;margin-top:8px">גרסה 2.8 · מנהל · שליח · מאפייה · סנכרון</div>
   </section>`;
-  filterCustomers(document.querySelector('#searchBox')?.value||'');
+  filterCustomers(searchQuery);
   showInstall();
   startBakeryTimer();
 }
+function deliveriesPane(){
+  let total=delivery().length,done=delivered().filter(c=>!c.skip_today).length,open=Math.max(0,total-done),pct=total?Math.round(done/total*100):0;
+  let problemRows=problems();
+  return `<div class="card">
+    <h2 style="color:var(--gold);margin-top:0">🚗 מעקב חלוקה להיום</h2>
+    <div class="stats">
+      <div class="stat"><span>סה״כ משלוחים</span><strong>${total}</strong></div>
+      <div class="stat"><span>נמסרו</span><strong>${done}</strong></div>
+      <div class="stat"><span>נשארו</span><strong>${open}</strong></div>
+      <div class="stat"><span>בעיות</span><strong>${problemRows.length}</strong></div>
+    </div>
+    <div class="deliveryProgress"><div style="width:${pct}%"></div></div>
+    <p class="muted" style="text-align:center">${pct}% מהחלוקה הושלמו</p>
+    <div class="quickActions">
+      <a href="./courier.html">פתח מסך שליח</a>
+      <button onclick="exportToday()">העתק מסלול</button>
+      <button onclick="load()">רענן סטטוסים</button>
+      <button onclick="setTab('customers');setFilter('problems')">הצג בעיות</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2 style="color:var(--gold);margin-top:0">משלוחים שטרם הסתיימו</h2>
+    <div class="delivery-list">${delivery().filter(c=>c.delivery_status!=='נמסר').map(c=>`<div class="delivery-item"><strong>${safe(c.name)}</strong><br><span class="muted">${safe(address(c))}</span><br><span class="status ${c.delivery_status==='בעיה'?'bad':'wait'}">${safe(c.delivery_status||'ממתין')}</span></div>`).join('')||'<div class="small-card good-card">✅ כל המשלוחים הושלמו</div>'}</div>
+  </div>`;
+}
+
 function dashPane(){
   return `<div class="stats">
     <div class="stat"><span>לקוחות פעילים</span><strong>${active().length}</strong></div>
@@ -229,7 +260,7 @@ function dashPane(){
 function customersPane(){
   return `<button class="cta secondary" onclick="openForm()">➕ הוסף לקוח</button>
   <h2 class="section-title">לקוחות</h2>
-  <input placeholder="חיפוש לקוח" oninput="filterCustomers(this.value)" id="searchBox">
+  <input placeholder="חיפוש לקוח" value="${safe(searchQuery)}" oninput="searchQuery=this.value;filterCustomers(this.value)" id="searchBox">
   <div class="filterbar">${filterBtn('all','כולם')}${filterBtn('delivery','למשלוח')}${filterBtn('problems','בעיות')}${filterBtn('skipped','ביטלו')}${filterBtn('unpaid','לא שילמו')}${filterBtn('paused','מוקפאים')}</div>
   <div id="customers-list" class="grid" style="margin-top:16px"></div>`;
 }
@@ -283,12 +314,19 @@ async function markProblemHandled(id){
 }
 function filterBtn(k,t){return`<button class="${currentFilter===k?'on':''}" onclick="setFilter('${k}')">${t}</button>`}
 function setFilter(k){currentFilter=k;activeTab='customers';render()}
+async function sendBakeryOrder(){
+  let row={order_date:todayLocal(),status:'נשלחה',buns_count:buns(),customers_count:delivery().length,active_count:active().length,skipped_count:skipped().length,unpaid_count:unpaid().length,message:bakeryOrderText(),sent_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+  let r=await db.from('bakery_orders').upsert(row,{onConflict:'order_date'}).select('*').single();
+  if(r.error){toast('שגיאה בשליחה',r.error.message);return}
+  bakeryOrder=r.data;addNotice('הזמנה נשלחה למאפייה',`${buns()} לחמניות · ${delivery().length} לקוחות`);toast('נשלח למאפייה','ההזמנה נשמרה והמאפייה יכולה לראות אותה.');render();
+}
+
 function bakeryCard(){
   let n=nowMin(),phase='',note='';
   if(n<720){phase=`<div class="small-card bakery-state">🟢 פתוח לשינויים</div>`;note=`<p id="bakeryNote" class="muted manager-note">ניתן לבצע שינויים עד <b>12:00</b>.<br>נותרו ${countdownTo(720)} לשינויים.<br>בשעה <b>13:00</b> ההזמנה תישלח אוטומטית למאפייה.</p>`}
   else if(n<780){phase=`<div class="small-card bakery-state">🟠 ההזמנה נסגרה</div>`;note=`<p id="bakeryNote" class="muted manager-note">השינויים נסגרו ב־<b>12:00</b>.<br>נותרו ${countdownTo(780)} עד שליחה אוטומטית ב־<b>13:00</b>.</p>`}
   else{phase=`<div class="small-card bakery-state">🔵 נשלח למאפייה אוטומטית</div>`;note=`<p class="muted manager-note">ההזמנה ננעלה ונשלחה למאפייה אוטומטית בשעה <b>13:00</b>.</p>`}
-  return`<div class="card" style="margin:16px 0"><h2 style="color:var(--gold);margin-top:0">🥖 סטטוס הזמנה</h2>${phase}${note}<div class="stats" style="margin:12px 0"><div class="stat"><span>לקוחות למשלוח</span><strong>${delivery().length}</strong></div><div class="stat"><span>לחמניות</span><strong>${buns()}</strong></div></div><button class="cta" onclick="showBakeryOrder()">מה נשלח למאפייה</button></div>`;
+  return`<div class="card" style="margin:16px 0"><h2 style="color:var(--gold);margin-top:0">🥖 סטטוס הזמנה</h2>${phase}${note}<div class="stats" style="margin:12px 0"><div class="stat"><span>לקוחות למשלוח</span><strong>${delivery().length}</strong></div><div class="stat"><span>לחמניות</span><strong>${buns()}</strong></div></div><button class="cta" onclick="showBakeryOrder()">מה נשלח למאפייה</button><button class="cta secondary" onclick="sendBakeryOrder()">${bakeryOrder?'עדכן ושלח מחדש':'שלח עכשיו למאפייה'}</button></div>`;
 }
 function startBakeryTimer(){clearInterval(bakeryTimer);bakeryTimer=setInterval(load,30000)}
 function filteredRows(q){
@@ -340,8 +378,8 @@ async function deleteCustomer(id){
   addNotice('לקוח נמחק','הלקוח נמחק מהמערכת.');
   await load();
 }
-async function togglePaid(id){let c=customers.find(x=>x.id===id);await db.from('customers').update({paid:!c.paid}).eq('id',id);addNotice('תשלום עודכן',c.name);await load()}
-async function toggleSkip(id){let c=customers.find(x=>x.id===id);await db.from('customers').update({skip_today:!c.skip_today}).eq('id',id);addNotice('סטטוס הזמנה עודכן',c.name);await load()}
+async function togglePaid(id){let c=customers.find(x=>x.id===id);let r=await db.from('customers').update({paid:!c.paid}).eq('id',id);if(r.error)return toast('שגיאה',r.error.message);addNotice('תשלום עודכן',c.name);await load()}
+async function toggleSkip(id){let c=customers.find(x=>x.id===id);let r=await db.from('customers').update({skip_today:!c.skip_today}).eq('id',id);if(r.error)return toast('שגיאה',r.error.message);addNotice('סטטוס הזמנה עודכן',c.name);await load()}
 window.addEventListener('online',()=>{addNotice('חזרת לאינטרנט','הנתונים מסתנכרנים.');load()});
 window.addEventListener('offline',()=>addNotice('אין חיבור לאינטרנט','לא לבצע שינויים עד שהחיבור חוזר.'));
 load();
