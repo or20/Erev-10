@@ -1,27 +1,23 @@
 <!doctype html>
 <html lang="he" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#111006" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="ערב 10" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#111006">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="ערב 10">
   <title>ערב 10</title>
-  <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta http-equiv="refresh" content="0; url=./join.html">
 </head>
 <body>
-  <main id="app" class="app-shell"></main>
-
-  <nav class="bottom-nav" aria-label="ניווט ראשי">
-    <button data-route="home" class="nav-item active">בית</button>
-    <button data-route="signup" class="nav-item">הרשמה</button>
-    <button data-route="customer" class="nav-item">לקוח</button>
-    <button data-route="admin" class="nav-item">ניהול</button>
-    <button data-route="courier" class="nav-item">שליח</button>
-  </nav>
-
-  <script src="./app.js"></script>
+  <main style="min-height:100vh;display:grid;place-items:center;background:#111006;color:#fff8e8;font-family:Arial,sans-serif;text-align:center;padding:24px">
+    <div>
+      <h1>ערב 10</h1>
+      <p>מעבירים אותך לדף ההצטרפות…</p>
+      <a href="./join.html" style="color:#ffd978;font-weight:700">לחץ כאן אם הדף לא נפתח</a>
+    </div>
+  </main>
+  <script>location.replace('./join.html');</script>
 </body>
 </html>
