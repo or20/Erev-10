@@ -71,39 +71,13 @@ function sortRoute(list){
     return num(a.apartment)-num(b.apartment);
   });
 }
-async function load(){
-  app.innerHTML='<section class="screen"><h1 class="top-title">טוען מסלול...</h1></section>';
-  let res=await db.from('customers').select('*').eq('active',true).eq('skip_today',false);
-  if(res.error){app.innerHTML=`<section class="screen"><h1 class="top-title">שגיאה</h1><div class="card">${esc(res.error.message)}</div></section>`;return}
-  rows=sortRoute(res.data||[]);
-  if(i>=rows.length)i=0;
-  lastSync=new Date();
-  save();render();
-}
+function sortRoute(list){return [...list].sort((a,b)=>{let s=String(a.street||'').localeCompare(String(b.street||''),'he');if(s)return s;let h=num(a.house)-num(b.house);if(h)return h;let f=num(a.floor)-num(b.floor);if(f)return f;return num(a.apartment)-num(b.apartment)})}
+async function load(){app.innerHTML='<section class="screen"><h1 class="top-title">טוען מסלול...</h1></section>';let res=await db.from('customers').select('*').eq('active',true).eq('skip_today',false);if(res.error){app.innerHTML=`<section class="screen"><h1 class="top-title">שגיאה</h1><div class="card">${esc(res.error.message)}</div></section>`;return}rows=sortRoute(res.data||[]);if(i>=rows.length)i=0;lastSync=new Date();save();render()}
 function deliveredCount(){return rows.filter(x=>getStatus(x)==='נמסר').length}
 function problemCount(){return rows.filter(x=>getStatus(x)==='בעיה').length}
 function closedCount(){return rows.filter(isClosed).length}
 function current(){let open=rows.filter(x=>!isClosed(x));if(open.length){let c=rows[i%rows.length];if(!isClosed(c))return c;return open[0]}return rows[i%rows.length]}
-async function setStatus(c,status,reason='',note=''){
-  let now=new Date(),time=now.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}),iso=now.toISOString();
-  localStorage.setItem(statusKey(c.id),status);
-  let row={
-    delivery_status:status,
-    delivery_problem_reason:status==='בעיה'?reason:null,
-    delivery_problem_note:status==='בעיה'?note:null,
-    delivery_problem_time:status==='בעיה'?time:null,
-    delivery_delivered_at:status==='נמסר'?iso:null
-  };
-  let r=await db.from('customers').update(row).eq('id',c.id);
-  if(r.error){
-    if(String(r.error.message||'').includes('delivery_delivered_at')){
-      delete row.delivery_delivered_at;
-      r=await db.from('customers').update(row).eq('id',c.id);
-    }
-  }
-  if(r.error){toast('שגיאה בשמירה',r.error.message);return false}
-  Object.assign(c,row);lastSync=new Date();return true;
-}
+async function setStatus(c,status,reason='',note=''){let now=new Date(),time=now.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}),iso=now.toISOString();localStorage.setItem(statusKey(c.id),status);let row={delivery_status:status,delivery_problem_reason:status==='בעיה'?reason:null,delivery_problem_note:status==='בעיה'?note:null,delivery_problem_time:status==='בעיה'?time:null,delivery_delivered_at:status==='נמסר'?iso:null};let r=await db.from('customers').update(row).eq('id',c.id);if(r.error&&String(r.error.message||'').includes('delivery_delivered_at')){delete row.delivery_delivered_at;r=await db.from('customers').update(row).eq('id',c.id)}if(r.error){toast('שגיאה בשמירה',r.error.message);return false}Object.assign(c,row);lastSync=new Date();return true}
 async function done(status){if(!rows.length)return;let c=current();let ok=await setStatus(c,status);if(ok){toast('נשמר',status==='נמסר'?'המסירה נשמרה עם שעה ותאריך.':status);nextOpen();render()}}
 function nextOpen(){let open=rows.filter(x=>!isClosed(x));if(!open.length)return;i=(i+1)%Math.max(rows.length,1);let guard=0;while(rows.length&&isClosed(rows[i%rows.length])&&guard<rows.length){i++;guard++}save()}
 function next(){if(!rows.length)return;i=(i+1)%rows.length;save();render()}
