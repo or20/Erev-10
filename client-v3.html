@@ -164,26 +164,73 @@ async function chooseToday(v){
 function choosePlan(p){draftPlan=p;if(p==='manual')draftToday=false;if(p==='daily')draftToday=true;if(p==='custom'&&!draftDays)draftDays=currentDays();changed=true;screen()}
 function toggleDay(d){let a=[...currentDays()],s=String(d);a=a.includes(s)?a.filter(x=>x!==s):[...a,s];draftPlan='custom';draftDays=a;changed=true;screen()}
 async function saveAll(){
-  if(!inServiceArea())return toast('השירות כרגע רק ברחוב ניב דוד','לא ניתן להזמין לכתובת מחוץ לאזור הפעילות הנוכחי.');
-  await loadOrdersCount();
-  if(todayWanted()&&limitFull())return toast('היום מלא','הגענו למכסה של 50 הזמנות להיום.');
-  if(locked())return toast('חלון ההזמנות סגור','אפשר להזמין מ־21:00 בערב ועד 12:00 בצהריים.');
-  let want=todayWanted();
-  saving=true;updateStatusOnly();
-  let r=await db.from('customers').update({skip_today:!want}).eq('id',me.id).select('id,skip_today').single();
-  saving=false;
-  if(r.error){updateStatusOnly();return toast('שגיאה',r.error.message);}
-  me.skip_today=!want;
-  let fresh=await db.from('customers').select('*').eq('id',me.id).single();if(!fresh.error&&fresh.data)me=fresh.data;
+  const planChanged=draftPlan!==null||draftDays!==null;
+  const orderChanged=draftToday!==null;
+
   if(draftPlan)localStorage.setItem(planKey(),draftPlan);
   if(draftDays)localStorage.setItem(daysKey(),draftDays.join(','));
   localStorage.setItem(initKey(),'1');
+
+  if(orderChanged){
+    if(!inServiceArea()){
+      draftToday=null;
+      changed=planChanged;
+      screen();
+      return toast('ההגדרות נשמרו','סוג המנוי והימים נשמרו. לא ניתן לשנות הזמנה לכתובת מחוץ לאזור הפעילות.');
+    }
+
+    await loadOrdersCount();
+
+    if(todayWanted()&&limitFull()){
+      draftToday=null;
+      changed=planChanged;
+      screen();
+      return toast('ההגדרות נשמרו','סוג המנוי והימים נשמרו, אך ההזמנה להיום לא נוספה כי המכסה מלאה.');
+    }
+
+    if(locked()){
+      draftToday=null;
+      changed=planChanged;
+      screen();
+      return toast('ההגדרות נשמרו','סוג המנוי והימים נשמרו. שינוי הזמנה להיום אפשרי רק בין 21:00 ל־12:00.');
+    }
+
+    let want=todayWanted();
+    saving=true;
+    updateStatusOnly();
+
+    let r=await db.from('customers')
+      .update({skip_today:!want})
+      .eq('id',me.id)
+      .select('id,skip_today')
+      .single();
+
+    saving=false;
+
+    if(r.error){
+      updateStatusOnly();
+      changed=planChanged;
+      screen();
+      return toast('ההגדרות נשמרו','סוג המנוי והימים נשמרו, אך שינוי ההזמנה נכשל: '+r.error.message);
+    }
+
+    me.skip_today=!want;
+    let fresh=await db.from('customers').select('*').eq('id',me.id).single();
+    if(!fresh.error&&fresh.data)me=fresh.data;
+  }
+
   await loadOrdersCount();
   resetDraft();
   lastSync=new Date();
-  addNotice('העדכון נשמר','העדכון נקלט בענן ונשמר במערכת.');
+  addNotice(
+    'העדכון נשמר',
+    orderChanged?'ההגדרות וההזמנה נשמרו במערכת.':'סוג המנוי והימים נשמרו.'
+  );
   screen();
-  toast('נשמר בהצלחה','העדכון נקלט במערכת.');
+  toast(
+    'נשמר בהצלחה',
+    orderChanged?'ההגדרות וההזמנה נשמרו.':'סוג המנוי והימים נשמרו.'
+  );
 }
 async function refresh(){let r=await db.from('customers').select('*').eq('id',me.id).single();if(!r.error&&r.data){me=r.data;await loadOrdersCount();resetDraft();lastSync=new Date();screen();toast('עודכן','הסטטוס רוענן.')}}
 async function pauseSub(){if(!confirm('לעצור את המנוי עכשיו?'))return;let r=await db.from('customers').update({active:false,skip_today:true,admin_note:'הלקוח ביקש עצירת מנוי דרך האפליקציה'}).eq('id',me.id);if(r.error)return toast('שגיאה',r.error.message);localStorage.removeItem(STORE);loginScreen();toast('המנוי נעצר','הפרטים נשמרו אצלנו.')}
@@ -321,7 +368,7 @@ function screen(){
     </div>
 
     <div class="credit"><a href="https://share.google/HUoheAjuVnUKozsP8">מבית zagzagwebs</a></div>
-    <div class="muted" style="font-size:12px;text-align:center;margin-top:8px">גרסה 3.9 · מסודר בלשוניות · הזמנה חד־פעמית</div>
+    <div class="muted" style="font-size:12px;text-align:center;margin-top:8px">גרסה 4.0 · שמירת ימים תמיד · הזמנה לפי שעות</div>
   </section>`;
   showInstall();
   startStatusTimer();
