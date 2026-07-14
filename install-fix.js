@@ -1,42 +1,51 @@
 (()=>{
-  function standalone(){
-    return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+  let deferredPrompt=null;
+  let installing=false;
+
+  const standalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+  const installButtons=()=>[...document.querySelectorAll('[onclick*="installApp"],#installFab,.installFab')];
+  const installBoxes=()=>[...document.querySelectorAll('#installBox,.install-box')];
+
+  function hideInstall(){
+    installBoxes().forEach(el=>el.classList.remove('show'));
+    installButtons().forEach(el=>el.style.display='none');
   }
 
-  function samsungBrowser(){
-    return /SamsungBrowser/i.test(navigator.userAgent);
+  function showInstall(){
+    if(standalone()||!deferredPrompt)return hideInstall();
+    installBoxes().forEach(el=>el.classList.add('show'));
+    installButtons().forEach(el=>el.style.display='');
   }
 
-  function isInstallButton(target){
-    return !!target.closest?.('[onclick*="installApp"]');
-  }
+  window.addEventListener('beforeinstallprompt',event=>{
+    event.preventDefault();
+    deferredPrompt=event;
+    showInstall();
+  });
 
-  function hideInstallControls(){
-    document.getElementById('installBox')?.classList.remove('show');
-    document.querySelector('.installFab')?.remove();
-  }
+  window.installApp=async function(){
+    if(installing||standalone())return hideInstall();
+    if(!deferredPrompt)return;
 
-  function openCurrentPageInChrome(){
-    const cleanUrl=location.href.replace(/^https?:\/\//,'');
-    location.href=`intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end`;
-  }
+    installing=true;
+    const promptEvent=deferredPrompt;
+    deferredPrompt=null;
 
-  if(standalone())hideInstallControls();
-
-  document.addEventListener('click',event=>{
-    if(!isInstallButton(event.target))return;
-    if(standalone()){
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      hideInstallControls();
-      return;
+    try{
+      await promptEvent.prompt();
+      const choice=await promptEvent.userChoice;
+      if(choice?.outcome==='accepted')hideInstall();
+      else setTimeout(showInstall,250);
+    }finally{
+      installing=false;
     }
-    if(samsungBrowser()){
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      openCurrentPageInChrome();
-    }
-  },true);
+  };
 
-  window.addEventListener('appinstalled',hideInstallControls);
+  window.addEventListener('appinstalled',()=>{
+    deferredPrompt=null;
+    hideInstall();
+  });
+
+  if(standalone())hideInstall();
+  else setTimeout(showInstall,800);
 })();
