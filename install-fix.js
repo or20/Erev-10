@@ -1,18 +1,14 @@
 (()=>{
-  let nativePrompt=null;
-
-  window.addEventListener('beforeinstallprompt',event=>{
-    event.preventDefault();
-    nativePrompt=event;
-    window.__e10InstallPrompt=event;
-  });
-
   function standalone(){
     return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
   }
 
   function samsungBrowser(){
     return /SamsungBrowser/i.test(navigator.userAgent);
+  }
+
+  function isInstallButton(target){
+    return !!target.closest?.('[onclick*="installApp"]');
   }
 
   function hideInstallControls(){
@@ -25,33 +21,22 @@
     location.href=`intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end`;
   }
 
-  window.installApp=async function(){
+  if(standalone())hideInstallControls();
+
+  document.addEventListener('click',event=>{
+    if(!isInstallButton(event.target))return;
     if(standalone()){
+      event.preventDefault();
+      event.stopImmediatePropagation();
       hideInstallControls();
       return;
     }
-
-    if(samsungBrowser()&&!nativePrompt&&!window.__e10InstallPrompt){
+    if(samsungBrowser()){
+      event.preventDefault();
+      event.stopImmediatePropagation();
       openCurrentPageInChrome();
-      return;
     }
-
-    for(let i=0;i<25&&!nativePrompt&&!window.__e10InstallPrompt;i++){
-      await new Promise(resolve=>setTimeout(resolve,100));
-    }
-
-    const promptEvent=nativePrompt||window.__e10InstallPrompt;
-    if(!promptEvent){
-      openCurrentPageInChrome();
-      return;
-    }
-
-    nativePrompt=null;
-    window.__e10InstallPrompt=null;
-    await promptEvent.prompt();
-    await promptEvent.userChoice;
-    hideInstallControls();
-  };
+  },true);
 
   window.addEventListener('appinstalled',hideInstallControls);
 })();
