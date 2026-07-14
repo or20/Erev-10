@@ -1,4 +1,4 @@
-const CACHE_NAME = "erev-10-pwa-v15";
+const CACHE_NAME = "erev-10-pwa-v16";
 
 const ASSETS = [
   "./",
@@ -43,7 +43,7 @@ async function injectInstallFix(response) {
     return new Response(html, {status: response.status, statusText: response.statusText, headers: response.headers});
   }
 
-  const fixed = html.replace("</body>", '<script src="./install-fix.js?v=15"></script></body>');
+  const fixed = html.replace("</body>", '<script src="./install-fix.js?v=16"></script></body>');
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   return new Response(fixed, {status: response.status, statusText: response.statusText, headers});
